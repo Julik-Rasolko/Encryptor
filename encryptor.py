@@ -115,6 +115,10 @@ try:
     f.close()
 except TypeError:
     model = ''
+except ValueError:
+    model = ''
+except IOError:
+    model = ''
 
 result = Get_result(args.mode, args.cipher, args.key, model, text)
 
