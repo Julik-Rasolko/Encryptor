@@ -5,17 +5,16 @@ import argparse
 import json
 
 from string import ascii_letters as ALPHABET
-ALPHABET_SIZE = 26
+ALPHABET_SIZE = int(len(ALPHABET)/2)
 
 
 class Coder:
-    @abc.abstractmethod
     def __init__(self, key, key_len):
         self.key = key
         self.key_len = key_len
 
     @abc.abstractmethod
-    def shift(self, letter):
+    def shift(self, letter, key_position):
         pass
 
     def en_de_code(self, text):
@@ -24,54 +23,44 @@ class Coder:
         for simbol in text:
             if simbol in ALPHABET:
                 new_text.append(self.shift(simbol, key_position))
-                key_position = (key_position+1)%self.key_len
+                key_position = (key_position+1) % self.key_len
             else:
                 new_text.append(simbol)
         return ''.join(new_text)
 
-class CaesarEncoder(Coder):
+    def super_shift(self, simbol, key):
+        if ALPHABET.find(simbol) < ALPHABET_SIZE:
+            return ALPHABET[(ALPHABET.find(simbol)+key)%ALPHABET_SIZE]
+        else:
+            return ALPHABET[(ALPHABET.find(simbol)-ALPHABET_SIZE+key)%ALPHABET_SIZE+ALPHABET_SIZE]
+
+
+class CaesarEnDecoder(Coder):
     def __init__(self, key):
         key = int(key) % ALPHABET_SIZE
         super().__init__(key, 1)
 
+class CaesarEncoder(CaesarEnDecoder):
     def shift(self, simbol, key_position: int):
-        if ALPHABET.find(simbol) < ALPHABET_SIZE:
-            return ALPHABET[(ALPHABET.find(simbol)+self.key)%ALPHABET_SIZE]
-        else:
-            return ALPHABET[(ALPHABET.find(simbol)-ALPHABET_SIZE+self.key)%ALPHABET_SIZE+ALPHABET_SIZE]
+        return self.super_shift(simbol, self.key)
 
-class CaesarDecoder(Coder):
-    def __init__(self, key):
-        key = int(key) % ALPHABET_SIZE
-        super().__init__(key, 1)
-
+class CaesarDecoder(CaesarEnDecoder):
     def shift(self, simbol, key_position: int):
-        if ALPHABET.find(simbol) < ALPHABET_SIZE:
-            return ALPHABET[(ALPHABET.find(simbol)-self.key)%ALPHABET_SIZE]
-        else:
-            return ALPHABET[(ALPHABET.find(simbol)-ALPHABET_SIZE-self.key)%ALPHABET_SIZE+ALPHABET_SIZE]
+        return self.super_shift(simbol, -self.key)
 
-class VigenereEncoder(Coder):
+
+class VigenereEnDecoder(Coder):
     def __init__(self, key):
         key = key.lower()
         super().__init__(key, len(key))
 
+class VigenereEncoder(VigenereEnDecoder):
     def shift(self, simbol, key_position: int):
-        if ALPHABET.find(simbol) < ALPHABET_SIZE:
-            return ALPHABET[(ALPHABET.find(simbol)+ALPHABET.find(self.key[key_position]))%ALPHABET_SIZE]
-        else:
-            return ALPHABET[(ALPHABET.find(simbol)+ALPHABET.find(self.key[key_position]))%ALPHABET_SIZE+ALPHABET_SIZE]
+        return self.super_shift(simbol, ALPHABET.find(self.key[key_position]))
 
-class VigenereDecoder(Coder):
-    def __init__(self, key):
-        key = key.lower()
-        super().__init__(key, len(key))
-
+class VigenereDecoder(VigenereEnDecoder):
     def shift(self, simbol, key_position: int):
-        if ALPHABET.find(simbol) < ALPHABET_SIZE:
-            return ALPHABET[(ALPHABET.find(simbol)-ALPHABET.find(self.key[key_position]))%ALPHABET_SIZE]
-        else:
-            return ALPHABET[(ALPHABET.find(simbol)-ALPHABET.find(self.key[key_position]))%ALPHABET_SIZE+ALPHABET_SIZE]
+        return self.super_shift(simbol, -ALPHABET.find(self.key[key_position]))
 
 
 class Trainer():
@@ -84,7 +73,7 @@ class Trainer():
     def get_model(self, text):
         statistic = Counter(text)
         for item in statistic.elements():
-            self.model[item] = 1.0*statistic[item]/sum(statistic.values())
+            self.model[item] = statistic[item] / sum(statistic.values())
         return (self.model)
 
 
@@ -92,27 +81,26 @@ class Hacker():
     def __init__(self, model):
         self.model = model
 
-    def hack(self, text):
-        trainer = Trainer()
-        decoder = CaesarDecoder(0)
-        right_key = 0
-        train_model = trainer.get_model(decoder.en_de_code(text))
+    def get_difference(self, train_model):
         difference = 0
         for item in train_model:
             if item[0] in self.model.keys():
                 difference += fabs(self.model[item[0]]-train_model[item[0]])
             else:
                 difference += fabs(train_model[item[0]])
+        return difference
+
+    def hack(self, text):
+        trainer = Trainer()
+        decoder = CaesarDecoder(0)
+        right_key = 0
+        train_model = trainer.get_model(decoder.en_de_code(text))
+        difference = self.get_difference(train_model)
         trainer.reset()
-        for key in range(1, 26):
+        for key in range(1, ALPHABET_SIZE):
             decoder.key = key
             train_model = trainer.get_model(decoder.en_de_code(text))
-            dist = 0
-            for item in train_model:
-                if item[0] in self.model.keys():
-                    dist += fabs(self.model[item[0]]-train_model[item[0]])
-                else:
-                    difference += fabs(train_model[item[0]])
+            dist = self.get_difference(train_model)
             if dist < difference:
                 right_key = key
                 difference = dist
@@ -121,58 +109,44 @@ class Hacker():
         return decoder.en_de_code(text)
 
 
+def get_source(input_file):
+    if input_file:
+        with open(input_file, 'r') as f:
+            text = f.read()
+    else:
+        text = input()
+    return text
+
+def deliver_result(output_file, text):
+    if output_file:
+        with open(output_file, 'w') as f:
+            f.write(text)
+    else:
+        print(text)
+
 
 def encode(args):
     if args.cipher == 'caesar':
         encoder = CaesarEncoder(args.key)
     else:
         encoder = VigenereEncoder(args.key)
-    
-    if args.input_file:
-        with open(args.input_file, 'r') as f:
-            text = f.read()
-    else:
-        text = input()
-    
+    text = get_source(args.input_file)
     encoded_text = encoder.en_de_code(text)
-    
-    if args.output_file:
-        with open(args.output_file, 'w') as f:
-            f.write(encoded_text)
-    else:
-        print(encoded_text)
+    deliver_result(args.output_file, encoded_text)
 
 def decode(args):
     if args.cipher == 'caesar':
         decoder = CaesarDecoder(args.key)
     else:
         decoder = VigenereDecoder(args.key)
-    
-    if args.input_file:
-        with open(args.input_file, 'r') as f:
-            text = f.read()
-    else:
-        text = input()
-    
+    text = get_source(args.input_file)
     decoded_text = decoder.en_de_code(text)
-    
-    if args.output_file:
-        with open(args.output_file, 'w') as f:
-            f.write(decoded_text)
-    else:
-        print(decoded_text)
+    deliver_result(args.output_file, decoded_text)
 
 def train(args):
     trainer = Trainer()
-
-    if args.text_file:
-        with open(args.text_file, 'r') as f:
-            text = f.read()
-    else:
-        text = input()
-
+    text = get_source(args.text_file)
     model = trainer.get_model(text)
-
     if args.model_file:
         with open(args.model_file, 'w') as f:
             json.dump(model, f)
@@ -180,23 +154,12 @@ def train(args):
         print(model)
 
 def hack(args):
-    if args.input_file:
-        with open(args.input_file, 'r') as f:
-            text = f.read()
-    else:
-        text = input()
-    
+    text = get_source(args.input_file)
     with open(args.model_file, 'r') as f:
             model = json.load(f)
-    
     hacker = Hacker(model)
     hacked_text = hacker.hack(text)
-
-    if args.output_file:
-        with open(args.output_file, 'w') as f:
-            f.write(hacked_text)
-    else:
-        print(hacked_text)
+    deliver_result(args.output_file, hacked_text)
 
 
 
@@ -230,3 +193,4 @@ parser_hack.add_argument('--model-file', help='This will be the file for statist
 
 args = parser.parse_args()
 args.function(args)
+
