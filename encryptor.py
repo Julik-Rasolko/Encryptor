@@ -20,19 +20,20 @@ class Coder:
     def en_de_code(self, text):
         new_text = []
         key_position = 0
-        for simbol in text:
-            if simbol in ALPHABET:
-                new_text.append(self.shift(simbol, key_position))
+        for symbol in text:
+            if symbol in ALPHABET:
+                new_text.append(self.shift(symbol, key_position))
                 key_position = (key_position+1) % self.key_len
             else:
-                new_text.append(simbol)
+                new_text.append(symbol)
         return ''.join(new_text)
 
-    def super_shift(self, simbol, key):
-        if ALPHABET.find(simbol) < ALPHABET_SIZE:
-            return ALPHABET[(ALPHABET.find(simbol)+key)%ALPHABET_SIZE]
+    def super_shift(self, symbol, key):
+        symbol_num = ALPHABET.find(symbol)
+        if symbol_num < ALPHABET_SIZE:
+            return ALPHABET[(symbol_num+key)%ALPHABET_SIZE]
         else:
-            return ALPHABET[(ALPHABET.find(simbol)-ALPHABET_SIZE+key)%ALPHABET_SIZE+ALPHABET_SIZE]
+            return ALPHABET[(symbol_num-ALPHABET_SIZE+key)%ALPHABET_SIZE+ALPHABET_SIZE]
 
 
 class CaesarEnDecoder(Coder):
@@ -41,12 +42,12 @@ class CaesarEnDecoder(Coder):
         super().__init__(key, 1)
 
 class CaesarEncoder(CaesarEnDecoder):
-    def shift(self, simbol, key_position: int):
-        return self.super_shift(simbol, self.key)
+    def shift(self, symbol, key_position: int):
+        return self.super_shift(symbol, self.key)
 
 class CaesarDecoder(CaesarEnDecoder):
-    def shift(self, simbol, key_position: int):
-        return self.super_shift(simbol, -self.key)
+    def shift(self, symbol, key_position: int):
+        return self.super_shift(symbol, -self.key)
 
 
 class VigenereEnDecoder(Coder):
@@ -55,39 +56,37 @@ class VigenereEnDecoder(Coder):
         super().__init__(key, len(key))
 
 class VigenereEncoder(VigenereEnDecoder):
-    def shift(self, simbol, key_position: int):
-        return self.super_shift(simbol, ALPHABET.find(self.key[key_position]))
+    def shift(self, symbol, key_position: int):
+        return self.super_shift(symbol, ALPHABET.find(self.key[key_position]))
 
 class VigenereDecoder(VigenereEnDecoder):
-    def shift(self, simbol, key_position: int):
-        return self.super_shift(simbol, -ALPHABET.find(self.key[key_position]))
+    def shift(self, symbol, key_position: int):
+        return self.super_shift(symbol, -ALPHABET.find(self.key[key_position]))
 
 
 class Trainer():
     def __init__(self):
-        self.model = {}
-    
-    def reset(self):
         self.model = {}
 
     def get_model(self, text):
         statistic = Counter(text)
         for item in statistic.elements():
             self.model[item] = statistic[item] / sum(statistic.values())
-        return (self.model)
+        return self.model
 
 
 class Hacker():
     def __init__(self, model):
         self.model = model
 
-    def get_difference(self, train_model):
+    def get_difference(self, train_model, key):
         difference = 0
-        for item in train_model:
-            if item[0] in self.model.keys():
-                difference += fabs(self.model[item[0]]-train_model[item[0]])
+        for symbol in train_model:
+            shifted_symbol = ALPHABET[(ALPHABET.find(symbol)-key)%ALPHABET_SIZE]
+            if shifted_symbol in self.model.keys():
+                difference += fabs(self.model[shifted_symbol]-train_model[symbol])
             else:
-                difference += fabs(train_model[item[0]])
+                difference += fabs(train_model[symbol])
         return difference
 
     def hack(self, text):
@@ -95,16 +94,12 @@ class Hacker():
         decoder = CaesarDecoder(0)
         right_key = 0
         train_model = trainer.get_model(decoder.en_de_code(text))
-        difference = self.get_difference(train_model)
-        trainer.reset()
+        min_difference = self.get_difference(train_model, 0)
         for key in range(1, ALPHABET_SIZE):
-            decoder.key = key
-            train_model = trainer.get_model(decoder.en_de_code(text))
-            dist = self.get_difference(train_model)
-            if dist < difference:
+            difference = self.get_difference(train_model, key)
+            if difference < min_difference:
                 right_key = key
-                difference = dist
-            trainer.reset()
+                min_difference = difference
         decoder.key = right_key
         return decoder.en_de_code(text)
 
