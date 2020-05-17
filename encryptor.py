@@ -91,16 +91,15 @@ class Hacker():
 
     def hack(self, text):
         trainer = Trainer()
-        decoder = CaesarDecoder(0)
         right_key = 0
-        train_model = trainer.get_model(decoder.en_de_code(text))
+        train_model = trainer.get_model(text)
         min_difference = self.get_difference(train_model, 0)
         for key in range(1, ALPHABET_SIZE):
             difference = self.get_difference(train_model, key)
             if difference < min_difference:
                 right_key = key
                 min_difference = difference
-        decoder.key = right_key
+        decoder = CaesarDecoder(right_key)
         return decoder.en_de_code(text)
 
 
